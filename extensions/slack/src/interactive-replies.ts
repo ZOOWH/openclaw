@@ -26,36 +26,44 @@ function parseChoice(raw: string, options?: { allowStyle?: boolean }): SlackChoi
   if (!trimmed) {
     return null;
   }
-  const delimiter = trimmed.indexOf(":");
-  if (delimiter === -1) {
-    return {
-      label: trimmed,
-      value: trimmed,
-    };
-  }
-  const label = trimmed.slice(0, delimiter).trim();
-  let value = trimmed.slice(delimiter + 1).trim();
-  if (!label || !value) {
-    return null;
-  }
+
+  // Strip an optional trailing `:style` suffix before splitting label/value.
+  // Only strip when there is a second colon remaining after removal, so a
+  // bare `Label:style` (single colon, value happens to match a style name)
+  // keeps its existing behavior as a plain label:value pair. (#99823)
+  let working = trimmed;
   let style: SlackChoice["style"];
   if (options?.allowStyle) {
-    const styleDelimiter = value.lastIndexOf(":");
-    if (styleDelimiter !== -1) {
-      const maybeStyle = normalizeLowercaseStringOrEmpty(value.slice(styleDelimiter + 1));
+    const lastColon = working.lastIndexOf(":");
+    const hasMultipleColons = lastColon !== -1 && working.indexOf(":") !== lastColon;
+    if (hasMultipleColons) {
+      const maybeStyle = normalizeLowercaseStringOrEmpty(working.slice(lastColon + 1));
       if (
         maybeStyle === "primary" ||
         maybeStyle === "secondary" ||
         maybeStyle === "success" ||
         maybeStyle === "danger"
       ) {
-        const unstyledValue = value.slice(0, styleDelimiter).trim();
-        if (unstyledValue) {
-          value = unstyledValue;
+        const unstyled = working.slice(0, lastColon).trim();
+        if (unstyled) {
+          working = unstyled;
           style = maybeStyle;
         }
       }
     }
+  }
+
+  // Split label/value at the LAST colon so colons inside the label
+  // (e.g. a time like "9:00") stay with the label and only the trailing
+  // token becomes the value. Single-colon entries are unaffected. (#99823)
+  const delimiter = working.lastIndexOf(":");
+  if (delimiter === -1) {
+    return { label: working, value: working };
+  }
+  const label = working.slice(0, delimiter).trim();
+  const value = working.slice(delimiter + 1).trim();
+  if (!label || !value) {
+    return null;
   }
   return style ? { label, value, style } : { label, value };
 }

@@ -94,4 +94,112 @@ describe("compileSlackInteractiveReplies", () => {
     );
     expect(result.interactive).toBeUndefined();
   });
+
+  it("preserves time colons in Slack button labels", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_buttons: Fr 10.07. 9:00:slot_fr_0900, Mo 13.07. 10:45:slot_mo_1045]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "buttons",
+          buttons: [
+            { label: "Fr 10.07. 9:00", value: "slot_fr_0900" },
+            { label: "Mo 13.07. 10:45", value: "slot_mo_1045" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("preserves colons in Slack select option labels", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_select: Pick a time | Fr 10.07. 9:00:slot_fr_0900, Mo 13.07. 10:45:slot_mo_1045]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "select",
+          placeholder: "Pick a time",
+          options: [
+            { label: "Fr 10.07. 9:00", value: "slot_fr_0900" },
+            { label: "Mo 13.07. 10:45", value: "slot_mo_1045" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("preserves style suffixes after time labels", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_buttons: Fr 10.07. 9:00:slot_fr_0900:primary, Later 10:45:slot_later:danger]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "buttons",
+          buttons: [
+            { label: "Fr 10.07. 9:00", value: "slot_fr_0900", style: "primary" },
+            { label: "Later 10:45", value: "slot_later", style: "danger" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("preserves single-colon entries unchanged (backward compatible)", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_buttons: Retry:retry, Ignore:ignore, Approve:approve:primary]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "buttons",
+          buttons: [
+            { label: "Retry", value: "retry" },
+            { label: "Ignore", value: "ignore" },
+            { label: "Approve", value: "approve", style: "primary" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("keeps single-colon entry as plain label:value when the value matches a style name", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_buttons: Approve:primary]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "buttons",
+          buttons: [{ label: "Approve", value: "primary" }],
+        },
+      ],
+    });
+  });
+
+  it("handles mixed time labels and legacy entries in the same directive", () => {
+    const result = compileSlackInteractiveReplies({
+      text: "[[slack_buttons: Fr 10.07. 9:00:slot_fr_0900, Retry:retry, Mo 13.07. 10:45:slot_mo_1045:danger]]",
+    });
+
+    expect(result.interactive).toEqual({
+      blocks: [
+        {
+          type: "buttons",
+          buttons: [
+            { label: "Fr 10.07. 9:00", value: "slot_fr_0900" },
+            { label: "Retry", value: "retry" },
+            { label: "Mo 13.07. 10:45", value: "slot_mo_1045", style: "danger" },
+          ],
+        },
+      ],
+    });
+  });
 });
