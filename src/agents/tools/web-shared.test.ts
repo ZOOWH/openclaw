@@ -175,6 +175,23 @@ describe("readResponseText", () => {
     });
   });
 
+  it("does not mark a streamed response as truncated when it fits exactly within the limit (#101837)", async () => {
+    const value = "12"; // 2 bytes
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(value));
+        controller.close();
+      },
+    });
+    const response = new Response(stream);
+
+    await expect(readResponseText(response, { maxBytes: 2 })).resolves.toEqual({
+      text: value,
+      truncated: false,
+      bytesRead: 2,
+    });
+  });
+
   it("preserves uncapped text-only fallback byte accounting", async () => {
     const value = "中文🔥";
     const text = vi.fn(async () => value);

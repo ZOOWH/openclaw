@@ -272,8 +272,10 @@ export async function readResponseText(
         bytesRead += chunk.byteLength;
         parts.push(chunk);
 
-        if (truncated || bytesRead >= maxBytes) {
-          truncated = true;
+        // Only break when a chunk was actually truncated (line 269).
+        // When bytesRead equals maxBytes exactly, the streamed response
+        // fits within the limit; let the next iteration read done=true.
+        if (truncated) {
           break;
         }
       }
