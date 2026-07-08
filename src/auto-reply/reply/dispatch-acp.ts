@@ -687,6 +687,12 @@ export async function tryDispatchAcpReply(params: {
       sourceIndexes: extractedFileImages.map((image) => image.attachmentIndex),
     });
     const attachments = resolveMergedAcpAttachments(attachmentEntries);
+    // If media understanding already described images as text, drop the
+    // raw image attachments so text-only models don't receive unsupported
+    // content. See https://github.com/openclaw/openclaw/issues/102135.
+    if (params.ctx.MediaUnderstanding?.length) {
+      attachments.length = 0;
+    }
     const turnPromptText = useMediaAttachments
       ? appendRecentHistoryImageContext({
           promptText,

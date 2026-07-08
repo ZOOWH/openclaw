@@ -908,6 +908,45 @@ describe("tryDispatchAcpReply", () => {
     }
   });
 
+  it("clears raw image attachments when media understanding already described them", async () => {
+    setReadyAcpResolution();
+    mockVisibleTextTurn("image described");
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "dispatch-acp-"));
+    const imagePath = path.join(tempDir, "inbound.png");
+    try {
+      await fs.writeFile(imagePath, "image-bytes");
+
+      await runDispatch({
+        bodyForAgent: "already described",
+        cfg: createAcpTestConfig({
+          channels: {
+            imessage: {
+              attachmentRoots: [tempDir],
+            },
+          },
+        }),
+        ctxOverrides: {
+          Provider: "imessage",
+          Surface: "imessage",
+          MediaPath: imagePath,
+          MediaType: "image/png",
+          MediaUnderstanding: [
+            {
+              description: "An image already processed by media understanding",
+              originalIndex: 0,
+            },
+          ],
+        },
+      });
+
+      // Media understanding already produced text descriptions, so
+      // the raw image attachment must be dropped before runTurn.
+      expect(runTurnCall().attachments).toBeUndefined();
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("selects bounded recent local history images", () => {
     const now = 1_700_000_000_000;
     const ctx = buildTestCtx({
