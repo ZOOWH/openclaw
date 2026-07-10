@@ -38,6 +38,10 @@ import type { SubagentRunRecord } from "./subagent-registry.types.js";
 
 const log = createSubsystemLogger("subagent-interrupted-resume");
 
+/** Prevents concurrent orphan-recovery scans from double-resuming the
+ *  same session (#103724). */
+const inProgressRecoveryKeys = new Set<string>();
+
 /** Delay before attempting recovery to let the gateway finish bootstrapping. */
 const DEFAULT_RECOVERY_DELAY_MS = 5_000;
 
@@ -225,6 +229,12 @@ export async function recoverOrphanedSubagentSessions(params: {
         result.skipped++;
         continue;
       }
+      // Skip sessions already being recovered by a concurrent scan (#103724).
+      if (inProgressRecoveryKeys.has(childSessionKey)) {
+        result.skipped++;
+        continue;
+      }
+      inProgressRecoveryKeys.add(childSessionKey);
 
       try {
         const agentId = resolveAgentIdFromSessionKey(childSessionKey);
@@ -385,6 +395,8 @@ export async function recoverOrphanedSubagentSessions(params: {
           childSessionKey,
           error,
         });
+      } finally {
+        inProgressRecoveryKeys.delete(childSessionKey);
       }
     }
   } catch (err) {

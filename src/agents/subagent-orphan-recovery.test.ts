@@ -658,4 +658,32 @@ describe("subagent-orphan-recovery", () => {
     expect(finalizeParams.error).toContain("Automatic recovery failed after 2 attempts");
     expect(finalizeParams.error).toContain("service restart");
   });
+
+  it("skips a session already being recovered by a concurrent scan (#103724)", async () => {
+    const activeRuns = new Map<string, SubagentRunRecord>([
+      ["run-1", createTestRunRecord({ childSessionKey: "cs:concurrent" })],
+    ]);
+    vi.mocked(sessions.loadSessionStore).mockReturnValue({
+      "cs:concurrent": {
+        abortedLastRun: true,
+      } as unknown as sessions.SessionEntry,
+    });
+
+    // First call starts recovery — in-progress key is set.
+    const first = recoverOrphanedSubagentSessions({
+      getActiveRuns: () => activeRuns,
+      resumedSessionKeys: new Set(),
+    });
+
+    // Second concurrent call — should skip because the key is in-flight.
+    const second = recoverOrphanedSubagentSessions({
+      getActiveRuns: () => activeRuns,
+      resumedSessionKeys: new Set(),
+    });
+
+    const [r1, r2] = await Promise.all([first, second]);
+    // Only one scan should have attempted recovery.
+    expect(r1.recovered + r2.recovered).toBeLessThanOrEqual(1);
+    expect(r1.skipped + r2.skipped).toBeGreaterThanOrEqual(1);
+  });
 });
