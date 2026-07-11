@@ -97,6 +97,17 @@ function shouldRotatePrompt(params: PromptDecisionParams): boolean {
   if (params.timedOutByRunBudget) {
     return false;
   }
+  // When a plugin harness (e.g. Codex) owns the transport, provider-side
+  // rate / billing limits apply to the harness session, not to an OpenClaw
+  // auth profile.  Rotating the profile cannot help and just wastes the
+  // user's quota on a doomed retry.  Skip rotation so the decision falls
+  // through to model fallback directly (#103734).
+  if (
+    params.harnessOwnsTransport &&
+    (params.failoverReason === "rate_limit" || params.failoverReason === "billing")
+  ) {
+    return false;
+  }
   return (
     params.failoverFailure &&
     params.failoverReason !== "timeout" &&

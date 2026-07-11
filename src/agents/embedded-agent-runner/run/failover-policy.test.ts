@@ -78,6 +78,64 @@ describe("resolveRunFailoverDecision", () => {
     });
   });
 
+  it("skips prompt-side rotation for harness-owned rate / billing limits (#103734)", () => {
+    // When a plugin harness owns the transport (e.g. Codex), provider-side
+    // rate / billing limits apply to the harness session, not to an OpenClaw
+    // auth profile.  Rotating the profile cannot help — skip rotation so
+    // the decision falls through to model fallback directly.
+    expect(
+      resolveRunFailoverDecision({
+        stage: "prompt",
+        aborted: false,
+        externalAbort: false,
+        fallbackConfigured: true,
+        failoverFailure: true,
+        failoverReason: "rate_limit",
+        harnessOwnsTransport: true,
+        profileRotated: false,
+      }),
+    ).toEqual({
+      action: "fallback_model",
+      reason: "rate_limit",
+    });
+    expect(
+      resolveRunFailoverDecision({
+        stage: "prompt",
+        aborted: false,
+        externalAbort: false,
+        fallbackConfigured: true,
+        failoverFailure: true,
+        failoverReason: "billing",
+        harnessOwnsTransport: true,
+        profileRotated: false,
+      }),
+    ).toEqual({
+      action: "fallback_model",
+      reason: "billing",
+    });
+  });
+
+  it("still rotates prompt profiles for harness-owned non-limit errors", () => {
+    // Harness-owned transport only skips rotation for rate_limit and billing.
+    // Other transient errors (e.g. server_error, overloaded) should still try
+    // profile rotation first since the profile itself may be the issue.
+    expect(
+      resolveRunFailoverDecision({
+        stage: "prompt",
+        aborted: false,
+        externalAbort: false,
+        fallbackConfigured: true,
+        failoverFailure: true,
+        failoverReason: "server_error",
+        harnessOwnsTransport: true,
+        profileRotated: false,
+      }),
+    ).toEqual({
+      action: "rotate_profile",
+      reason: "server_error",
+    });
+  });
+
   it("falls back after prompt rotation is exhausted", () => {
     expect(
       resolveRunFailoverDecision({
