@@ -146,6 +146,59 @@ describe("streamOpenAICodexResponses websocket blob transport", () => {
     expect(connections).toBe(2);
   });
 
+  it("accepts valid blob-like websocket messages and decodes them", async () => {
+    // WebSocket sends pure JSON events, one per message frame
+    // Simulate a complete WebSocket stream with response.completed event
+    const completedEvent = {
+      type: "response.completed",
+      response: {
+        id: "resp_valid",
+        status: "completed",
+        output: [],
+        usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      },
+    };
+    const jsonMessage = JSON.stringify(completedEvent);
+    const validBlob = new Blob([new TextEncoder().encode(jsonMessage)]);
+    const validBlobArrayBuffer = vi.fn(async () => validBlob.arrayBuffer());
+
+    class ValidBlobWebSocket extends EventTarget {
+      constructor() {
+        super();
+        queueMicrotask(() => this.dispatchEvent(new Event("open")));
+      }
+
+      send(): void {
+        queueMicrotask(() => {
+          this.dispatchEvent(
+            Object.assign(new Event("message"), {
+              data: {
+                arrayBuffer: validBlobArrayBuffer,
+                size: validBlob.size,
+              },
+            }),
+          );
+        });
+      }
+
+      close(): void {}
+    }
+    const fetchMock = vi.fn();
+    vi.stubGlobal("WebSocket", ValidBlobWebSocket);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await streamOpenAICodexResponses(model, context, {
+      apiKey: createJwt({
+        "https://api.openai.com/auth": { chatgpt_account_id: "acct-1" },
+      }),
+      transport: "websocket",
+    }).result();
+
+    expect(result.stopReason).toBe("stop");
+    expect(validBlobArrayBuffer).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects oversized blob-like websocket messages before reading them", async () => {
     const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
     class OversizedBlobWebSocket extends EventTarget {

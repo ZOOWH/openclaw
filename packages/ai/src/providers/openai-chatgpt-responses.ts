@@ -1726,4 +1726,8 @@ function toLintErrorObject(value: unknown, fallbackMessage: string): Error {
   }
   return error;
 }
+
+// Test-only export for runtime proof - exposes internal decoder for direct testing
+export const decodeWebSocketDataForTest = decodeWebSocketData;
+
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
